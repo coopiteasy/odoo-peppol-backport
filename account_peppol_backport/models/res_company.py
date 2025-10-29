@@ -20,7 +20,13 @@ def _cc_checker(country_code, code_type):
 
 
 def _re_sanitizer(expression):
-    return lambda endpoint: (res.group(0) if (res := re.search(expression, endpoint)) else endpoint)
+    def _re_sanitizer_func(endpoint):
+        res = re.search(expression, endpoint)
+        if res:
+            return res.group(0)
+        return endpoint
+
+    return _re_sanitizer_func
 
 
 PEPPOL_ENDPOINT_RULES = {
@@ -120,7 +126,8 @@ class ResCompany(models.Model):
         self.ensure_one()
         peppol_dict = PEPPOL_ENDPOINT_WARNINGS if warning else PEPPOL_ENDPOINT_RULES
 
-        return True if (endpoint_rule := peppol_dict.get(self.peppol_eas)) is None else endpoint_rule(self.peppol_endpoint)
+        endpoint_rule = peppol_dict.get(self.peppol_eas)
+        return True if endpoint_rule is None else endpoint_rule(self.peppol_endpoint)
 
     # -------------------------------------------------------------------------
     # CONSTRAINTS
@@ -170,8 +177,8 @@ class ResCompany(models.Model):
                 ('company_id', '=', company.id),
                 ('is_peppol_journal', '=', True),
             ])
-            journals_to_reset.is_peppol_journal = False
-            company.peppol_purchase_journal_id.is_peppol_journal = True
+            journals_to_reset.write({"is_peppol_journal": False})
+            company.peppol_purchase_journal_id.write({"is_peppol_journal": True})
 
     @api.depends('email')
     def _compute_account_peppol_contact_email(self):
@@ -197,10 +204,13 @@ class ResCompany(models.Model):
     @api.model
     def _sanitize_peppol_endpoint(self, vals, eas=False, endpoint=False):
         # TODO: remove in master
-        if not (peppol_eas := vals.get('peppol_eas', eas)) or not (peppol_endpoint := vals.get('peppol_endpoint', endpoint)):
+        peppol_eas = vals.get('peppol_eas', eas)
+        peppol_endpoint = vals.get('peppol_endpoint', endpoint)
+        if not peppol_eas or not peppol_endpoint:
             return vals
 
-        if sanitizer := PEPPOL_ENDPOINT_SANITIZERS.get(peppol_eas):
+        sanitizer = PEPPOL_ENDPOINT_SANITIZERS.get(peppol_eas)
+        if sanitizer:
             vals['peppol_endpoint'] = sanitizer(peppol_endpoint)
 
         return vals
@@ -211,7 +221,8 @@ class ResCompany(models.Model):
         endpoint = values.get('peppol_endpoint')
         if not eas or not endpoint:
             return
-        if sanitizer := PEPPOL_ENDPOINT_SANITIZERS.get(eas):
+        sanitizer = PEPPOL_ENDPOINT_SANITIZERS.get(eas)
+        if sanitizer:
             new_endpoint = sanitizer(endpoint)
             if new_endpoint:
                 values['peppol_endpoint'] = new_endpoint
