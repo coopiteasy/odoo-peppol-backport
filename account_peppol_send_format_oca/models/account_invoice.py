@@ -11,8 +11,11 @@ class AccountInvoice(models.Model):
 
     @api.multi
     def action_invoice_open(self):
+        can_send = self.env[
+            "account_edi_proxy_client_peppol.user"
+        ]._get_can_send_domain()
         for invoice in self:
-            if invoice.company_id.account_peppol_proxy_state != "active":
+            if invoice.company_id.account_peppol_proxy_state not in can_send:
                 # don't check invoices for companies that are not ready to
                 # send through peppol
                 continue
